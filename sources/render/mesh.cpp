@@ -141,6 +141,16 @@ MeshPtr create_mesh(const aiMesh *mesh)
       const aiBone *bone = mesh->mBones[i];
       assert(bone->mNode != nullptr);
 
+      int numChildren = bone->mNode->mNumChildren;
+      meshPtr->bones[i].childLocals.resize(numChildren);
+      for (int j = 0; j < numChildren; j++)
+      {
+        const auto child = bone->mNode->mChildren[j];
+        glm::mat4x4 childLocal = glm::make_mat4x4(&child->mTransformation.a1);
+        childLocal = glm::transpose(childLocal);
+        meshPtr->bones[i].childLocals[j] = childLocal;
+      }
+
       std::cout << i << ") bone name " << bone->mName.C_Str()<< " node name"<< bone->mNode->mName.C_Str()<< std::endl;
        //("%d) bone name %s node name %s", i, );
       //bonesMap[std::string(bone->mName.C_Str())] = i;

@@ -101,9 +101,20 @@ void render_character(const Character &character, const mat4 &cameraProjView, ve
 
   for (const auto &bone : character.mesh->bones)
   {
-    draw_arrow(bone.bindPose, vec3(0), vec3(0.1f, 0, 0), vec3(1, 0, 0), 0.01f);
-    draw_arrow(bone.bindPose, vec3(0), vec3(0, 0.1f, 0), vec3(0, 1, 0), 0.01f);
-    draw_arrow(bone.bindPose, vec3(0), vec3(0, 0, 0.1f), vec3(0, 0, 1), 0.01f);
+    // parent-to-child arrow
+    for (const glm::mat4x4 &childLocal : bone.childLocals)
+    {
+      glm::vec3 from(0.0f);
+      glm::vec3 to(childLocal[3]);
+      glm::vec3 color(1.0f, 1.0f, 0.0f);
+      float size = 0.07f * glm::l2Norm(to);
+      draw_arrow(bone.bindPose, from, to, color, size);
+    }
+
+    // parent local basis
+    draw_arrow(bone.bindPose, vec3(0), vec3(0.05f, 0, 0), vec3(1, 0, 0), 0.005f);
+    draw_arrow(bone.bindPose, vec3(0), vec3(0, 0.05f, 0), vec3(0, 1, 0), 0.005f);
+    draw_arrow(bone.bindPose, vec3(0), vec3(0, 0, 0.05f), vec3(0, 0, 1), 0.005f);
   }
 
 }

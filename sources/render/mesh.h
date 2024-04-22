@@ -15,6 +15,7 @@ struct Mesh
   {
     std::string name;
     glm::mat4x4 bindPose, invBindPose;
+    std::vector<glm::mat4x4> childLocals;
   };
 
   std::vector<Bone> bones;

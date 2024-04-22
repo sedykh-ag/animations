@@ -1,7 +1,6 @@
 #include "texture2d.h"
 #include "glad/glad.h"
 #include <cassert>
-#include <log.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 
@@ -44,7 +43,6 @@ Texture2DPtr create_texture2d(const char *path)
 {
   int w, h, ch;
   stbi_set_flip_vertically_on_load(true);
-  debug_log("loading %s", path);
   auto stbiData = stbi_load(path, &w, &h, &ch, 0);
   //assert(ch == 4);
   Texture2DPtr result;

@@ -12,27 +12,27 @@ set(SRC_ROOT ${CMAKE_SOURCE_DIR})
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_FLAGS "-m64 -Wall -Wextra -Wno-pragma-pack -Wno-deprecated-declarations -Wno-deprecated-copy -g")
-set(CMAKE_BUILD_TYPE "Debug")
 
 
 if(WIN32)
     set(ADDITIONAL_LIBS winmm.lib Version.lib Setupapi.lib)
     set(ADDITIONAL_LIBS ${ADDITIONAL_LIBS} SDL2 imm32)
 
+    set(PATH_TO_LIBS ${CMAKE_BINARY_DIR}/../Debug/x64/)
     add_library(SDL2 STATIC IMPORTED)
     set_target_properties(SDL2 PROPERTIES
-        IMPORTED_LOCATION_RELEASE "${CMAKE_SOURCE_DIR}/../libs/libSDL2.a"
-        IMPORTED_LOCATION_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}/../libs/libSDL2.a"
-        IMPORTED_LOCATION_DEBUG "${CMAKE_SOURCE_DIR}/../libs/libSDL2.a"
+        IMPORTED_LOCATION_RELEASE "${CMAKE_BINARY_DIR}/../libs/libSDL2.a"
+        IMPORTED_LOCATION_RELWITHDEBINFO "${CMAKE_BINARY_DIR}/../libs/libSDL2.a"
+        IMPORTED_LOCATION_DEBUG "${CMAKE_BINARY_DIR}/../libs/libSDL2.a"
         LINKER_LANGUAGE CXX)
 
     set(ADDITIONAL_LIBS ${ADDITIONAL_LIBS} assimp)
 
     add_library(assimp STATIC IMPORTED)
     set_target_properties(assimp PROPERTIES
-        IMPORTED_LOCATION_DEBUG "${CMAKE_SOURCE_DIR}/../libs/assimp.lib"
-        IMPORTED_LOCATION_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}/../libs/assimp.lib"
-        IMPORTED_LOCATION_RELEASE "${CMAKE_SOURCE_DIR}/../libs/assimp.lib"
+        IMPORTED_LOCATION_DEBUG "${CMAKE_BINARY_DIR}/../libs/assimp.lib"
+        IMPORTED_LOCATION_RELWITHDEBINFO "${CMAKE_BINARY_DIR}/../libs/assimp.lib"
+        IMPORTED_LOCATION_RELEASE "${CMAKE_BINARY_DIR}/../libs/assimp.lib"
         LINKER_LANGUAGE CXX)
 else()
     set(ADDITIONAL_LIBS -ldl)
@@ -65,3 +65,4 @@ include_directories(${SRC_ROOT}/3rd_party)
 add_executable(${EXE_NAME} ${EXE_SOURCES})
 
 target_link_libraries(${EXE_NAME} ${ADDITIONAL_LIBS})
+

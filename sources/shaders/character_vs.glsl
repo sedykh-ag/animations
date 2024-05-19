@@ -9,7 +9,7 @@ struct VsOutput
 
 uniform mat4 Transform;
 uniform mat4 ViewProjection;
-
+uniform mat4 BonesTransform[128];
 
 layout(location = 0) in vec3 Position;
 layout(location = 1) in vec3 Normal;
@@ -27,15 +27,20 @@ vec3 get_random_color(uint x)
   col = fract(col) * vec3(x,x,x);
   col = fract(col) * vec3(1,x,x);
   col = fract(col) * vec3(1,1,x);
-  //col = vec3(phi*i, phi*i*i, phi*i*i*i); // has precision issues
   return fract(col);
 }
 
 void main()
 {
+  mat4 weightedBoneTransform = mat4(0);
 
-  vec3 VertexPosition = (Transform * vec4(Position, 1)).xyz;
-  vsOutput.EyespaceNormal = (Transform * vec4(Normal, 0)).xyz;
+  for (int i = 0; i < 4; i++)
+    weightedBoneTransform += BonesTransform[BoneIndex[i]] * BoneWeights[i];
+
+  mat4 Model = Transform * weightedBoneTransform;
+
+  vec3 VertexPosition = (Model * vec4(Position, 1)).xyz;
+  vsOutput.EyespaceNormal = normalize((Model * vec4(Normal, 0)).xyz);
 
   gl_Position = ViewProjection * vec4(VertexPosition, 1);
   vsOutput.WorldPosition = VertexPosition;

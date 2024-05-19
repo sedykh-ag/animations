@@ -4,21 +4,28 @@
 #include <string>
 #include <vector>
 #include <3dmath.h>
+#include <assimp/scene.h>
 
 
 struct Mesh
 {
   const uint32_t vertexArrayBufferObject;
   const int numIndices;
+  const aiNode* rootNode = nullptr;
 
-  struct Bone
+  struct NodeSkeleton
   {
-    std::string name;
-    glm::mat4x4 bindPose, invBindPose;
-    std::vector<glm::mat4x4> childLocals;
-  };
+    size_t nodeCount = 0;
 
-  std::vector<Bone> bones;
+    std::vector<glm::mat4> localTm;
+    std::vector<glm::mat4> globalTm;
+    std::vector<glm::mat4> invBindPose;
+    std::vector<int> parent;
+    std::vector<std::string> names;
+    std::map<std::string, size_t> nodeToBoneMap;
+
+    void updateGlobalTransforms();
+  } nodeSkeleton;
 
   Mesh(uint32_t vertexArrayBufferObject, int numIndices) :
     vertexArrayBufferObject(vertexArrayBufferObject),

@@ -5,6 +5,8 @@
 #include "camera.h"
 #include <application.h>
 #include <render/debug_arrow.h>
+#include <imgui/imgui.h>
+#include "ImGuizmo.h"
 
 struct UserCamera
 {
@@ -97,26 +99,118 @@ void render_character(const Character &character, const mat4 &cameraProjView, ve
   shader.set_vec3("AmbientLight", light.ambient);
   shader.set_vec3("SunLight", light.lightColor);
 
+  // bones
+  const auto& skeleton = character.mesh->nodeSkeleton;
+  size_t nodeCount = skeleton.nodeCount;
+  size_t boneCount = skeleton.invBindPose.size();
+
+  std::vector<glm::mat4> bonesTransform(boneCount);
+  
+  for (size_t i = 0; i < nodeCount; i++)
+  {
+    auto it = skeleton.nodeToBoneMap.find(skeleton.names[i]);
+    if (it != skeleton.nodeToBoneMap.end())
+    {
+      int boneIdx = it->second;
+      bonesTransform[boneIdx] = skeleton.globalTm[i] * skeleton.invBindPose[boneIdx];
+    }
+  }
+  shader.set_mat4x4("BonesTransform", bonesTransform);
+
   render(character.mesh);
 
-  for (const auto &bone : character.mesh->bones)
+  for (size_t i = 0; i < nodeCount; i++)
   {
-    // parent-to-child arrow
-    for (const glm::mat4x4 &childLocal : bone.childLocals)
+    glm::vec3 from{0, 0, 0};
+    glm::vec3 to{0, 0, 0};
+    for (size_t j = i; j < nodeCount; j++)
     {
-      glm::vec3 from(0.0f);
-      glm::vec3 to(childLocal[3]);
-      glm::vec3 color(1.0f, 1.0f, 0.0f);
-      float size = 0.07f * glm::l2Norm(to);
-      draw_arrow(bone.bindPose, from, to, color, size);
+      if (skeleton.parent[j] == int(i))
+      {
+        to = glm::vec3(skeleton.localTm[j][3]);
+        draw_arrow(skeleton.globalTm[i], from, to, vec3(1.0f, 1.0f, 0.0f), 0.01f);
+      }
     }
-
-    // parent local basis
-    draw_arrow(bone.bindPose, vec3(0), vec3(0.05f, 0, 0), vec3(1, 0, 0), 0.005f);
-    draw_arrow(bone.bindPose, vec3(0), vec3(0, 0.05f, 0), vec3(0, 1, 0), 0.005f);
-    draw_arrow(bone.bindPose, vec3(0), vec3(0, 0, 0.05f), vec3(0, 0, 1), 0.005f);
   }
 
+}
+
+void render_imguizmo(ImGuizmo::OPERATION &mCurrentGizmoOperation, ImGuizmo::MODE &mCurrentGizmoMode)
+{
+  if (ImGui::Begin("gizmo window"))
+  {
+    if (ImGui::IsKeyPressed('Z'))
+      mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+    if (ImGui::IsKeyPressed('E'))
+      mCurrentGizmoOperation = ImGuizmo::ROTATE;
+    if (ImGui::IsKeyPressed('R'))
+      mCurrentGizmoOperation = ImGuizmo::SCALE;
+    if (ImGui::RadioButton("Translate", mCurrentGizmoOperation == ImGuizmo::TRANSLATE))
+      mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Rotate", mCurrentGizmoOperation == ImGuizmo::ROTATE))
+      mCurrentGizmoOperation = ImGuizmo::ROTATE;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Scale", mCurrentGizmoOperation == ImGuizmo::SCALE))
+      mCurrentGizmoOperation = ImGuizmo::SCALE;
+
+    if (mCurrentGizmoOperation != ImGuizmo::SCALE)
+    {
+      if (ImGui::RadioButton("Local", mCurrentGizmoMode == ImGuizmo::LOCAL))
+        mCurrentGizmoMode = ImGuizmo::LOCAL;
+      ImGui::SameLine();
+      if (ImGui::RadioButton("World", mCurrentGizmoMode == ImGuizmo::WORLD))
+        mCurrentGizmoMode = ImGuizmo::WORLD;
+    }
+  }
+  ImGui::End();
+}
+
+void imgui_render()
+{
+  ImGuizmo::BeginFrame();
+  Character &character = scene->characters[0];
+
+  auto &skeleton = character.mesh->nodeSkeleton;
+
+  skeleton.updateGlobalTransforms();
+  
+  size_t nodeCount = skeleton.nodeCount;
+  static size_t idx = 0;
+
+  if (ImGui::Begin("Skeleton view"))
+  {
+    for (size_t i = 0; i < nodeCount; i++)
+    {
+      ImGui::Text("%d) %s", int(i), skeleton.names[i].c_str());
+      ImGui::SameLine();
+      ImGui::PushID(i);
+      if (ImGui::Button("edit"))
+      {
+        idx = i;
+      }
+      ImGui::PopID();
+    }
+  }
+  ImGui::End();
+
+  static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::TRANSLATE);
+  static ImGuizmo::MODE mCurrentGizmoMode(ImGuizmo::WORLD);
+  render_imguizmo(mCurrentGizmoOperation, mCurrentGizmoMode);
+
+  const glm::mat4 &projection = scene->userCamera.projection;
+  const glm::mat4 &transform = scene->userCamera.transform;
+  mat4 cameraView = inverse(transform);
+  ImGuiIO &io = ImGui::GetIO();
+  ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
+
+  glm::mat4 globNodeTm = skeleton.globalTm[idx];
+
+  ImGuizmo::Manipulate(glm::value_ptr(cameraView), glm::value_ptr(projection), mCurrentGizmoOperation, mCurrentGizmoMode,
+                        glm::value_ptr(globNodeTm));
+
+  int parent = skeleton.parent[idx];
+  skeleton.localTm[idx] = glm::inverse(parent >= 0 ? skeleton.globalTm[parent] : glm::mat4(1.f)) * globNodeTm;
 }
 
 void game_render()

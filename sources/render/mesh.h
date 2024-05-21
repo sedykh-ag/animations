@@ -11,21 +11,11 @@ struct Mesh
 {
   const uint32_t vertexArrayBufferObject;
   const int numIndices;
-  const aiNode* rootNode = nullptr;
 
-  struct NodeSkeleton
-  {
-    size_t nodeCount = 0;
+  std::vector<glm::mat4> invBindPose;
+  std::vector<glm::mat4> bindPose;
+  std::map<std::string, int> nodeToBoneMap;
 
-    std::vector<glm::mat4> localTm;
-    std::vector<glm::mat4> globalTm;
-    std::vector<glm::mat4> invBindPose;
-    std::vector<int> parent;
-    std::vector<std::string> names;
-    std::map<std::string, size_t> nodeToBoneMap;
-
-    void updateGlobalTransforms();
-  } nodeSkeleton;
 
   Mesh(uint32_t vertexArrayBufferObject, int numIndices) :
     vertexArrayBufferObject(vertexArrayBufferObject),

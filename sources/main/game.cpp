@@ -8,6 +8,13 @@
 #include <imgui/imgui.h>
 #include "ImGuizmo.h"
 
+#include "ozz/animation/runtime/animation.h"
+#include "ozz/animation/runtime/local_to_model_job.h"
+#include "ozz/animation/runtime/sampling_job.h"
+#include "ozz/animation/runtime/skeleton.h"
+#include "ozz/base/maths/simd_math.h"
+#include "ozz/base/maths/soa_transform.h"
+
 struct UserCamera
 {
   glm::mat4 transform;
@@ -33,9 +40,24 @@ struct Scene
 };
 
 static std::unique_ptr<Scene> scene;
+static std::vector<std::string> animationList;
+
+#include <filesystem>
+static std::vector<std::string> scan_animations(const char *path)
+{
+  std::vector<std::string> animations;
+  for (auto &p : std::filesystem::recursive_directory_iterator(path))
+  {
+    auto filePath = p.path();
+    if (p.is_regular_file() && filePath.extension() == ".fbx")
+      animations.push_back(filePath.string());
+  }
+  return animations;
+}
 
 void game_init()
 {
+  animationList = scan_animations("resources/Animations");
   scene = std::make_unique<Scene>();
   scene->light.lightDirection = glm::normalize(glm::vec3(-1, -1, 0));
   scene->light.lightColor = glm::vec3(1.f);
@@ -100,39 +122,39 @@ void render_character(const Character &character, const mat4 &cameraProjView, ve
   shader.set_vec3("SunLight", light.lightColor);
 
   // bones
-  const auto& skeleton = character.mesh->nodeSkeleton;
-  size_t nodeCount = skeleton.nodeCount;
-  size_t boneCount = skeleton.invBindPose.size();
+  // const auto& skeleton = character.mesh->nodeSkeleton;
+  // size_t nodeCount = skeleton.nodeCount;
+  // size_t boneCount = skeleton.invBindPose.size();
 
-  std::vector<glm::mat4> bonesTransform(boneCount);
+  // std::vector<glm::mat4> bonesTransform(boneCount);
   
-  for (size_t i = 0; i < nodeCount; i++)
-  {
-    auto it = skeleton.nodeToBoneMap.find(skeleton.names[i]);
-    if (it != skeleton.nodeToBoneMap.end())
-    {
-      int boneIdx = it->second;
-      bonesTransform[boneIdx] = skeleton.globalTm[i] * skeleton.invBindPose[boneIdx];
-    }
-  }
-  shader.set_mat4x4("BonesTransform", bonesTransform);
+  // for (size_t i = 0; i < nodeCount; i++)
+  // {
+  //   auto it = skeleton.nodeToBoneMap.find(skeleton.names[i]);
+  //   if (it != skeleton.nodeToBoneMap.end())
+  //   {
+  //     int boneIdx = it->second;
+  //     bonesTransform[boneIdx] = skeleton.globalTm[i] * skeleton.invBindPose[boneIdx];
+  //   }
+  // }
+
+  // shader.set_mat4x4("BonesTransform", bonesTransform);
 
   render(character.mesh);
 
-  for (size_t i = 0; i < nodeCount; i++)
-  {
-    glm::vec3 from{0, 0, 0};
-    glm::vec3 to{0, 0, 0};
-    for (size_t j = i; j < nodeCount; j++)
-    {
-      if (skeleton.parent[j] == int(i))
-      {
-        to = glm::vec3(skeleton.localTm[j][3]);
-        draw_arrow(skeleton.globalTm[i], from, to, vec3(1.0f, 1.0f, 0.0f), 0.01f);
-      }
-    }
-  }
-
+  // for (size_t i = 0; i < nodeCount; i++)
+  // {
+  //   glm::vec3 from{0, 0, 0};
+  //   glm::vec3 to{0, 0, 0};
+  //   for (size_t j = i; j < nodeCount; j++)
+  //   {
+  //     if (skeleton.parent[j] == int(i))
+  //     {
+  //       to = glm::vec3(skeleton.localTm[j][3]);
+  //       draw_arrow(skeleton.globalTm[i], from, to, vec3(1.0f, 1.0f, 0.0f), 0.01f);
+  //     }
+  //   }
+  // }
 }
 
 void render_imguizmo(ImGuizmo::OPERATION &mCurrentGizmoOperation, ImGuizmo::MODE &mCurrentGizmoMode)
@@ -169,48 +191,39 @@ void render_imguizmo(ImGuizmo::OPERATION &mCurrentGizmoOperation, ImGuizmo::MODE
 void imgui_render()
 {
   ImGuizmo::BeginFrame();
-  Character &character = scene->characters[0];
-
-  auto &skeleton = character.mesh->nodeSkeleton;
-
-  skeleton.updateGlobalTransforms();
-  
-  size_t nodeCount = skeleton.nodeCount;
-  static size_t idx = 0;
-
-  if (ImGui::Begin("Skeleton view"))
+  for (Character &character : scene->characters)
   {
-    for (size_t i = 0; i < nodeCount; i++)
+    if (ImGui::Begin("Animation list"))
     {
-      ImGui::Text("%d) %s", int(i), skeleton.names[i].c_str());
-      ImGui::SameLine();
-      ImGui::PushID(i);
-      if (ImGui::Button("edit"))
-      {
-        idx = i;
-      }
-      ImGui::PopID();
+      std::vector<const char *> animations(animationList.size() + 1);
+      animations[0] = "None";
+      for (size_t i = 0; i < animationList.size(); i++)
+        animations[i + 1] = animationList[i].c_str();
+      static int item = 0;
+      if (ImGui::Combo(animations[item], &item, animations.data(), animations.size()))
+      { }
     }
+    ImGui::End();
+
+    static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::TRANSLATE);
+    static ImGuizmo::MODE mCurrentGizmoMode(ImGuizmo::WORLD);
+    render_imguizmo(mCurrentGizmoOperation, mCurrentGizmoMode);
+
+    const glm::mat4 &projection = scene->userCamera.projection;
+    const glm::mat4 &transform = scene->userCamera.transform;
+    mat4 cameraView = inverse(transform);
+    ImGuiIO &io = ImGui::GetIO();
+    ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
+
+    glm::mat4 globNodeTm = character.transform;
+
+    ImGuizmo::Manipulate(glm::value_ptr(cameraView), glm::value_ptr(projection), mCurrentGizmoOperation, mCurrentGizmoMode,
+                         glm::value_ptr(globNodeTm));
+
+    character.transform = globNodeTm;
+
+    break;
   }
-  ImGui::End();
-
-  static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::TRANSLATE);
-  static ImGuizmo::MODE mCurrentGizmoMode(ImGuizmo::WORLD);
-  render_imguizmo(mCurrentGizmoOperation, mCurrentGizmoMode);
-
-  const glm::mat4 &projection = scene->userCamera.projection;
-  const glm::mat4 &transform = scene->userCamera.transform;
-  mat4 cameraView = inverse(transform);
-  ImGuiIO &io = ImGui::GetIO();
-  ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
-
-  glm::mat4 globNodeTm = skeleton.globalTm[idx];
-
-  ImGuizmo::Manipulate(glm::value_ptr(cameraView), glm::value_ptr(projection), mCurrentGizmoOperation, mCurrentGizmoMode,
-                        glm::value_ptr(globNodeTm));
-
-  int parent = skeleton.parent[idx];
-  skeleton.localTm[idx] = glm::inverse(parent >= 0 ? skeleton.globalTm[parent] : glm::mat4(1.f)) * globNodeTm;
 }
 
 void game_render()

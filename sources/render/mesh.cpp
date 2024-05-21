@@ -7,11 +7,6 @@
 #include <log.h>
 #include "glad/glad.h"
 
-static void create_node_skeleton(const MeshPtr &mesh);
-static void traverse_node_tree(int parent_idx, const aiNode *node, Mesh::NodeSkeleton &skeleton);
-
-#pragma clang optimize off
-//#pragma optimize(off, "")
 static void create_indices(const std::vector<unsigned int> &indices)
 {
   GLuint arrayIndexBuffer;
@@ -63,7 +58,7 @@ MeshPtr create_mesh(const std::vector<unsigned int> &indices, const Channel&... 
 }
 
 
-MeshPtr create_mesh(const aiMesh *mesh, const aiNode *rootNode)
+MeshPtr create_mesh(const aiMesh *mesh)
 {
   std::vector<uint32_t> indices;
   std::vector<vec3> vertices;
@@ -134,63 +129,28 @@ MeshPtr create_mesh(const aiMesh *mesh, const aiNode *rootNode)
     }
   }
   auto meshPtr = create_mesh(indices, vertices, normals, uv, weights, weightsIndex);
-  meshPtr->rootNode = rootNode;
-
-  create_node_skeleton(meshPtr);
 
   if (mesh->HasBones())
   {
-    auto &skeleton = meshPtr->nodeSkeleton;
-
-    size_t numBones = mesh->mNumBones;
-    skeleton.invBindPose.resize(numBones);
-
-    for (size_t i = 0; i < numBones; i++)
+    int numBones = mesh->mNumBones;
+    meshPtr->invBindPose.resize(numBones);
+    meshPtr->bindPose.resize(numBones);
+    for (int i = 0; i < numBones; i++)
     {
       const aiBone *bone = mesh->mBones[i];
-      assert(bone->mNode != nullptr);
 
-      std::cout << i << ") bone name " << bone->mName.C_Str()<< " node name"<< bone->mNode->mName.C_Str()<< std::endl;
+      std::cout << i << ") bone name " << bone->mName.C_Str()<< std::endl;
 
-      glm::mat4x4 invBindPose = glm::transpose(glm::make_mat4x4(&bone->mOffsetMatrix.a1));
-      
-      skeleton.nodeToBoneMap[bone->mName.C_Str()] = i;
-      skeleton.invBindPose[i] = invBindPose;
+      meshPtr->nodeToBoneMap[std::string(bone->mName.C_Str())] = i;
+      glm::mat4x4 mOffsetMatrix = glm::make_mat4x4(&bone->mOffsetMatrix.a1);
+      mOffsetMatrix = glm::transpose(mOffsetMatrix);
+      meshPtr->invBindPose[i] = mOffsetMatrix;
+      meshPtr->bindPose[i] = glm::inverse(mOffsetMatrix);
+      // meshPtr->bones[i].name = bone->mName.C_Str();
     }
   }
 
   return meshPtr;
-}
-
-static void create_node_skeleton(const MeshPtr &mesh)
-{
-  auto &skeleton = mesh->nodeSkeleton;
-  traverse_node_tree(-1, mesh->rootNode, skeleton);
-  skeleton.globalTm.resize(skeleton.nodeCount);
-  skeleton.updateGlobalTransforms();
-}
-
-static void traverse_node_tree(int parent_idx, const aiNode *node, Mesh::NodeSkeleton &skeleton)
-{
-  size_t nodeIdx = skeleton.nodeCount;
-  skeleton.nodeCount++;
-
-  skeleton.localTm.emplace_back(
-    glm::transpose(glm::make_mat4x4(&(node->mTransformation.a1))));
-  skeleton.parent.emplace_back(parent_idx);
-  skeleton.names.emplace_back(node->mName.C_Str());
-
-  for (size_t i = 0; i < node->mNumChildren; i++)
-    traverse_node_tree(nodeIdx, node->mChildren[i], skeleton);
-}
-
-void Mesh::NodeSkeleton::updateGlobalTransforms()
-{
-  for (size_t i = 0; i < nodeCount; i++)
-  {
-    int parentIdx = parent[i];
-    globalTm[i] = (parentIdx >= 0 ? globalTm[parentIdx] : glm::mat4(1.f)) * localTm[i];
-  }
 }
 
 MeshPtr load_mesh(const char *path, int idx)
@@ -210,7 +170,7 @@ MeshPtr load_mesh(const char *path, int idx)
     return nullptr;
   }
 
-  return create_mesh(scene->mMeshes[idx], scene->mRootNode);
+  return create_mesh(scene->mMeshes[idx]);
 }
 
 void render(const MeshPtr &mesh)

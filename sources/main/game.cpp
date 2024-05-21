@@ -8,13 +8,18 @@
 #include <imgui/imgui.h>
 #include "ImGuizmo.h"
 #include <render/scene.h>
+#include <render/animation.h>
 
+#include "ozz/animation/offline/animation_optimizer.h"
 #include "ozz/animation/runtime/animation.h"
 #include "ozz/animation/runtime/local_to_model_job.h"
 #include "ozz/animation/runtime/sampling_job.h"
 #include "ozz/animation/runtime/skeleton.h"
 #include "ozz/base/maths/simd_math.h"
 #include "ozz/base/maths/soa_transform.h"
+
+extern OptimizationSettings optimization_settings;
+extern OptimizationStats optimization_stats;
 
 struct UserCamera
 {
@@ -283,6 +288,8 @@ void imgui_skeleton_view(const Character& character)
 
 void imgui_animations_control(Character& character)
 {
+  static bool shouldRebuildAnimation = false;
+
   if (ImGui::Begin("Animation control"))
   {
     std::vector<const char *> animations(animationList.size() + 1);
@@ -290,7 +297,7 @@ void imgui_animations_control(Character& character)
     for (size_t i = 0; i < animationList.size(); i++)
       animations[i + 1] = animationList[i].c_str();
     static int item = 0;
-    if (ImGui::Combo(animations[item], &item, animations.data(), animations.size()))
+    if (ImGui::Combo(animations[item], &item, animations.data(), animations.size()) || shouldRebuildAnimation)
     {
       AnimationPtr animation;
       if (item > 0)
@@ -302,6 +309,7 @@ void imgui_animations_control(Character& character)
       }
       character.currentAnimation = animation;
       character.animTime = 0;
+      shouldRebuildAnimation = false;
     }
   }
 
@@ -311,6 +319,7 @@ void imgui_animations_control(Character& character)
     return;
   }
 
+  ImGui::Text("Playback settings");
   if (ImGui::Button(character.paused ? "Play" : "Pause"))
     character.paused = !character.paused;
   ImGui::Checkbox("Loop", &character.looped);
@@ -318,6 +327,15 @@ void imgui_animations_control(Character& character)
     0.0f, character.currentAnimation->duration());
   ImGui::SliderFloat("Playback speed", &character.playbackSpeed,
     -2.0f, 3.0f);
+
+  ImGui::Text("Optimization settings");
+  shouldRebuildAnimation |= ImGui::SliderFloat("Tolerance", &optimization_settings.tolerance, 0.0f, 100.0f, "%.2f mm");
+  shouldRebuildAnimation |= ImGui::SliderFloat("Distance", &optimization_settings.distance, 0.0f, 1000.0f, "%.2f mm");
+  ImGui::Text("Optimization stats");
+  ImGui::Text("Raw size: %d", optimization_stats.rawSize);
+  ImGui::Text("Compressed raw size: %d", optimization_stats.compressedRawSize);
+  ImGui::Text("Runtime size: %d", optimization_stats.runtimeSize);
+
   ImGui::End();
 }
 

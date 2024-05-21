@@ -12,6 +12,10 @@
 #include <assimp/scene.h>
 #include "render/scene.h"
 #include "log.h"
+#include "animation.h"
+
+OptimizationSettings optimization_settings;
+OptimizationStats optimization_stats;
 
 void build_skeleton(ozz::animation::offline::RawSkeleton::Joint &root, const aiNode &ai_root)
 {
@@ -64,7 +68,6 @@ SkeletonPtr create_skeleton(const aiNode &ai_root)
 
 AnimationPtr create_animation(const aiAnimation &ai_animation, const SkeletonPtr &skeleton)
 {
-
   ozz::animation::offline::RawAnimation raw_animation;
 
   // Sets animation duration (to 1.4s).
@@ -150,6 +153,17 @@ AnimationPtr create_animation(const aiAnimation &ai_animation, const SkeletonPtr
     return nullptr;
   }
 
+  // Optimization
+  ozz::animation::offline::AnimationOptimizer optimizer;
+  ozz::animation::offline::RawAnimation raw_optimized_animation;
+
+  optimizer.setting.distance = optimization_settings.distance * 1e-3f;
+  optimizer.setting.tolerance = optimization_settings.tolerance * 1e-3f;
+
+  optimizer.joints_setting_override.clear();
+  if (!optimizer(raw_animation, *skeleton.get(), &raw_optimized_animation))
+    debug_error("failed to optimize animation!\n");
+  
   //////////////////////////////////////////////////////////////////////////////
   // This final section converts the RawAnimation to a runtime Animation.
   //////////////////////////////////////////////////////////////////////////////
@@ -161,12 +175,11 @@ AnimationPtr create_animation(const aiAnimation &ai_animation, const SkeletonPtr
   // a new runtime animation instance.
   // This operation will fail and return an empty unique_ptr if the RawAnimation
   // isn't valid.
-  ozz::unique_ptr<ozz::animation::Animation> animation = builder(raw_animation);
+  ozz::unique_ptr<ozz::animation::Animation> animation = builder(raw_optimized_animation);
 
-  // ...use the animation as you want...
+  optimization_stats.rawSize = raw_animation.size();
+  optimization_stats.compressedRawSize = raw_optimized_animation.size();
+  optimization_stats.runtimeSize = animation->size();
 
-  debug_log("animation %s raw size = %d, runtime size = %d", animation->name(), raw_animation.size(), animation->size());
-
-  std::fflush(stdout);
   return std::shared_ptr<ozz::animation::Animation>(std::move(animation));
 }

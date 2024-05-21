@@ -42,7 +42,10 @@ struct Character
   std::vector<ozz::math::Float4x4> models_;
 
   AnimationPtr currentAnimation;
-  float animTime = 0;
+  float animTime = 0.0f;
+  float playbackSpeed = 1.0f;
+  bool looped = true;
+  bool paused = false;
 };
 
 struct Scene
@@ -143,9 +146,12 @@ void game_update()
   {
     if (character.currentAnimation)
     {
-      character.animTime += get_delta_time();
+      if (!character.paused)
+        character.animTime += get_delta_time() * character.playbackSpeed;
       if (character.animTime >= character.currentAnimation->duration())
-        character.animTime = 0;
+        character.animTime = character.looped ? 0.0f : character.currentAnimation->duration();
+      else if (character.animTime < 0.0f) // for the case of negative playback rate
+        character.animTime = character.looped ? character.currentAnimation->duration() : 0.0f;
 
       // Samples optimized animation at t = animation_time_.
       ozz::animation::SamplingJob sampling_job;
@@ -275,9 +281,9 @@ void imgui_skeleton_view(const Character& character)
   ImGui::End();
 }
 
-void imgui_animations_list(Character& character)
+void imgui_animations_control(Character& character)
 {
-  if (ImGui::Begin("Animation list"))
+  if (ImGui::Begin("Animation control"))
   {
     std::vector<const char *> animations(animationList.size() + 1);
     animations[0] = "None";
@@ -298,6 +304,20 @@ void imgui_animations_list(Character& character)
       character.animTime = 0;
     }
   }
+
+  if (!character.currentAnimation)
+  {
+    ImGui::End();
+    return;
+  }
+
+  if (ImGui::Button(character.paused ? "Play" : "Pause"))
+    character.paused = !character.paused;
+  ImGui::Checkbox("Loop", &character.looped);
+  ImGui::SliderFloat("Animation time", &character.animTime,
+    0.0f, character.currentAnimation->duration());
+  ImGui::SliderFloat("Playback speed", &character.playbackSpeed,
+    -2.0f, 3.0f);
   ImGui::End();
 }
 
@@ -307,7 +327,7 @@ void imgui_render()
   for (Character &character : scene->characters)
   {
     imgui_skeleton_view(character);
-    imgui_animations_list(character);
+    imgui_animations_control(character);
     
 
     static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::TRANSLATE);
